@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Linha - Dados Educacionais</title>
+    <style>
+        .line-chart {
+            width: 800px;
+            height: 500px;
+            margin: 50px auto;
+        }
+        .line {
+            fill: none;
+            stroke-width: 2px;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 120px;
+            height: auto;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .legend {
+            font-size: 12px;
+            font-family: sans-serif;
+            position: absolute;
+            right: 10px;
+            top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Caixa de seleção para os municípios -->
+    <select id="municipio"></select>
+    <div class="line-chart"></div>
+    <div class="tooltip"></div>
+    <div class="legend"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        let data; // Variável para armazenar os dados carregados
+
+        // Carrega os dados do arquivo JSON
+        d3.json('Educa.json').then(function(loadedData) {
+            data = loadedData; // Armazena os dados carregados na variável 'data'
+            // Preenche a caixa de seleção com os municípios
+            const municipios = Array.from(new Set(data.map(d => d.fmun)));
+            const select = d3.select("#municipio");
+            municipios.forEach(function(municipio) {
+                select.append("option").text(municipio);
+            });
+
+            // Chama a função para desenhar o gráfico com o primeiro município
+            desenharGrafico(municipios[0]);
+        });
+
+        // Função para desenhar o gráfico
+        function desenharGrafico(municipioSelecionado) {
+            // Limpa o gráfico anterior
+            d3.select(".line-chart").selectAll("*").remove();
+
+            // Filtra os dados pelo município selecionado
+            const dadosMunicipio = data.filter(d => d.fmun === municipioSelecionado);
+
+            // Configuração do gráfico
+            const margin = { top: 20, right: 20, bottom: 30, left: 50 },
+                  width = 800 - margin.left - margin.right,
+                  height = 500 - margin.top - margin.bottom;
+
+            // Criação do SVG
+            const svg = d3.select(".line-chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Escalas
+            const xScale = d3.scaleTime()
+                .domain(d3.extent(dadosMunicipio, d => d.Ano))
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, d3.max(dadosMunicipio, d => Math.max(d.Fundamental_Aprovação, d.Ensino_médio_aprovação, d.Fundamental_Reprovação, d.Ensino_médio_Reprovação, d.Fundamental_Abandono, d.Ensino_médio_abandono))])
+                .range([height, 0]);
+
+            // Eixos
+            const xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));
+            const yAxis = d3.axisLeft(yScale);
+
+            // Adiciona os eixos
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .call(xAxis);
+
+            svg.append("g")
+                .call(yAxis);
+
+            // Linhas do gráfico
+            const keys = ["Fundamental_Aprovação", "Ensino_médio_aprovação", "Fundamental_Reprovação", "Ensino_médio_Reprovação", "Fundamental_Abandono", "Ensino_médio_abandono"];
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            keys.forEach(function(key, index) {
+                const lineGenerator = d3.line()
+                    .x(d => xScale(d.Ano))
+                    .y(d => yScale(d[key]));
+
+                svg.append("path")
+                    .datum(dadosMunicipio)
+                    .attr("class", "line")
+                    .attr("d", lineGenerator)
+                    .style("stroke", color(index))
+                    .on("mouseover", function(event, d) {
+                        const xPosition = event.pageX;
+                        const yPosition = event.pageY;
+                        d3.select(".tooltip")
+                            .style("left", xPosition + "px")
+                            .style("top", yPosition + "px")
+                            .style("opacity", 1)
+                            .text(key.replace(/_/g, " "));
+                    })
+                    .on("mouseout", function() {
+                        d3.select(".tooltip").style("opacity", 0);
+                    });
+            });
+
+            // Legenda
+            const legendContainer = d3.select(".legend");
+            keys.forEach(function(key, index) {
+                let legend = legendContainer.append("div").style("color", color(index));
+                legend.append("span").style("background-color", color(index)).style("width", "10px").style("height", "10px").style("display", "inline-block").style("margin-right", "5px");
+                legend.append("text").text(key.replace(/_/g, " "));
+            });
+        }
+
+        // Atualiza o gráfico quando um novo município é selecionado
+        d3.select("#municipio").on("change", function() {
+            desenharGrafico(this.value);
+        });
+    </script>
+</body>
+</html>

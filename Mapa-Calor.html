@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mapa de Calor de Ocorrências no RJ</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      width: auto;
+      height: auto;
+      padding: 8px;
+      font: 12px sans-serif;
+      background: lightsteelblue;
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      pointer-events: none;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <label for="year">Selecione o ano:</label>
+  <select id="year">
+    <option value="2022">2022</option>
+    <option value="2021">2021</option>
+    <option value="2020">2020</option>
+    <option value="2019">2019</option>
+    <option value="2018">2018</option>
+    <option value="2017">2017</option>
+    <option value="2016">2016</option>
+    <option value="2015">2015</option>
+    <option value="2014">2014</option>
+    <!-- Adicione mais anos conforme necessário -->
+  </select>
+
+  <svg width="960" height="600"></svg>
+  <div class="tooltip"></div>
+
+<script>
+  // Definir largura e altura do SVG
+  const width = 960;
+  const height = 600;
+
+  // Ajustar projeção e caminho geográfico conforme necessário
+  const projection = d3.geoMercator()
+    .center([-43.2, -22.9]) // Ajuste esses valores conforme necessário para centralizar o mapa
+    .scale(7500) // Reduzir a escala do mapa
+    .translate([width / 2, height / 2]);
+
+  const path = d3.geoPath().projection(projection);
+
+  // Selecionar o elemento SVG
+  const svg = d3.select('svg')
+    .attr('width', width)
+    .attr('height', height)
+    .call(d3.zoom().on("zoom", function (event) {
+      svg.attr("transform", event.transform);
+    }))
+    .append("g");
+
+  // Criar tooltip
+  const tooltip = d3.select('body').append('div')
+    .attr('class', 'tooltip')
+    .style('opacity', 0);
+
+  // Escala de cores
+  const colorScale = d3.scaleLinear()
+    .range(['blue', 'red']) // Define o intervalo de cores de lightblue a darkblue
+    .interpolate(d3.interpolateLab); // Usa interpolação Lab para suavizar a transição de cores
+
+
+  // Carregar dados geográficos
+  d3.json('geojs-33-mun.json').then(function(geojson) {
+
+    // Carregar dados CSV com delimitador correto
+    function loadData(year) {
+      const filePath = `Violência.csv`;
+
+      d3.dsv(";", filePath).then(function(data) { // Alterado de d3.csv para d3.dsv e especificado o delimitador ";"
+        // Filtrar dados pelo ano selecionado
+        const filteredData = data.filter(d => +d.ano === +year);
+
+          // Preparar contagem de ocorrências por município
+          const occurrences = {};
+          filteredData.forEach(function(d) {
+            const fmun = d.fmun;
+            const ocorrencias = +d.registro_ocorrencias;
+            occurrences[fmun] = (occurrences[fmun] || 0) + ocorrencias;
+          });
+
+          // Mapear ocorrências para geojson
+          geojson.features.forEach(function(d) {
+            const fmun = d.properties.name;
+            d.properties.ocorrencias = occurrences[fmun] || 0;
+          });
+
+          // Atualizar domínio da escala de cores com base nos dados carregados
+          const maxOccurrences = d3.max(Object.values(occurrences));
+          colorScale.domain([0, maxOccurrences]);
+
+          // Desenhar municípios no mapa
+          svg.selectAll('path')
+            .data(geojson.features)
+            .enter().append('path')
+            .attr('d', path)
+            .attr('fill', function(d) {
+              const ocorrencias = d.properties.ocorrencias || 0;
+              return colorScale(ocorrencias);
+            })
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 0.5)
+            .on('mouseover', function(d) {
+              tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+              tooltip.html(`<strong>${d.properties.name}</strong><br>Ocorrências: ${d.properties.ocorrencias}`)
+                .style('left', (d3.event.pageX) + 'px')
+                .style('top', (d3.event.pageY - 28) + 'px');
+            })
+            .on('mouseout', function(d) {
+              tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+            });
+          }).catch(function(error) {
+            console.error('Erro ao carregar dados CSV:', error);
+          });
+        }
+
+      // Manipulador de eventos para mudança de ano
+      d3.select('#year').on('change', function() {
+        const selectedYear = this.value;
+        svg.selectAll('path').remove(); // Limpar caminhos existentes
+        loadData(selectedYear); // Carregar dados para o ano selecionado
+      });
+
+      // Inicializar com o ano atualmente selecionado
+      const initialYear = d3.select('#year').property('value');
+      loadData(initialYear);
+    }).catch(function(error) {
+      console.error('Erro ao carregar dados geográficos:', error);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Aprovações, Reprovações e Abandono - Rio de Janeiro</title>
+    <style>
+        .chart {
+            width: 800px;
+            height: 500px;
+            margin: 50px auto;
+        }
+        .bar {
+            fill: steelblue;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 60px;
+            height: 28px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Caixa de seleção para os municípios -->
+    <select id="municipio"></select>
+    <div class="chart"></div>
+    <div class="tooltip"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        let data; // Variável para armazenar os dados carregados
+
+        // Carrega os dados do arquivo JSON
+        d3.json('Educa.json').then(function(loadedData) {
+            data = loadedData; // Armazena os dados carregados na variável 'data'
+            // Preenche a caixa de seleção com os municípios
+            const municipios = Array.from(new Set(data.map(d => d.fmun)));
+            const select = d3.select("#municipio");
+            municipios.forEach(function(municipio) {
+                select.append("option").text(municipio);
+            });
+
+            // Chama a função para desenhar o gráfico com o primeiro município
+            desenharGrafico(municipios[0]);
+        });
+
+        // Função para desenhar o gráfico
+        function desenharGrafico(municipioSelecionado) {
+            // Limpa o gráfico anterior
+            d3.select(".chart").selectAll("*").remove();
+
+            // Filtra os dados pelo município selecionado
+            const dadosMunicipio = data.filter(d => d.fmun === municipioSelecionado);
+
+            // Configuração do gráfico
+            const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+            const width = 800 - margin.left - margin.right;
+            const height = 500 - margin.top - margin.bottom;
+
+            // Criação do SVG
+            const svg = d3.select(".chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Escalas
+            const xScale = d3.scaleBand()
+                .domain(dadosMunicipio.map(d => d.Ano))
+                .range([0, width])
+                .padding(0.1);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, d3.max(dadosMunicipio, d => Math.max(d.Fundamental_Aprovação, d.Ensino_médio_aprovação, d.Fundamental_Reprovação, d.Ensino_médio_Reprovação, d.Fundamental_Abandono, d.Ensino_médio_abandono))])
+                .nice()
+                .range([height, 0]);
+
+            // Eixos
+            const xAxis = d3.axisBottom(xScale);
+            const yAxis = d3.axisLeft(yScale);
+
+            // Adiciona os eixos
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", `translate(0, ${height})`)
+                .call(xAxis)
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end");
+
+            svg.append("g")
+                .attr("class", "y axis")
+                .call(yAxis);
+
+            // Gráficos de barras para Aprovação, Reprovação e Abandono
+            const keys = ["Fundamental_Aprovação", "Ensino_médio_aprovação", "Fundamental_Reprovação", "Ensino_médio_Reprovação", "Fundamental_Abandono", "Ensino_médio_abandono"];
+            const color = d3.scaleOrdinal()
+                .domain(keys)
+                .range(["steelblue", "green", "orange", "red", "yellow", "purple"]);
+
+            svg.selectAll(".bar")
+                .data(dadosMunicipio)
+                .enter().append("g")
+                .attr("class", "bar")
+                .attr("transform", d => `translate(${xScale(d.Ano)}, 0)`)
+                .selectAll("rect")
+                .data(d => keys.map(key => ({ key: key, value: d[key] })))
+                .enter().append("rect")
+                .attr("x", d => xScale.bandwidth() / keys.length * keys.indexOf(d.key))
+                .attr("y", d => yScale(d.value))
+                .attr("width", xScale.bandwidth() / keys.length)
+                .attr("height", d => height - yScale(d.value))
+                .attr("fill", d => color(d.key))
+                .on("mouseover", function(event, d) {
+                    d3.select(".tooltip")
+                        .style("opacity", 1)
+                        .html(d.value)
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function() {
+                    d3.select(".tooltip").style("opacity", 0);
+                });
+
+            // Legenda
+            const legend = svg.selectAll(".legend")
+                .data(keys)
+                .enter().append("g")
+                .attr("class", "legend")
+                .attr("transform", (d, i) => `translate(0,${i * 20})`);
+
+            legend.append("rect")
+                .attr("x", width - 18)
+                .attr("width", 18)
+                .attr("height", 18)
+                .attr("fill", color);
+
+            legend.append("text")
+                .attr("x", width - 24)
+                .attr("y", 9)
+                .attr("dy", ".35em")
+                .style("text-anchor", "end")
+                .text(d => d.replace("_", " "));
+        }
+
+        // Atualiza o gráfico quando um novo município é selecionado
+        d3.select("#municipio").on("change", function() {
+            desenharGrafico(this.value);
+        });
+    </script>
+</body>
+</html>

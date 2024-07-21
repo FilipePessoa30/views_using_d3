@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Dispersão - Dados de Violência</title>
+    <style>
+        .scatter-chart {
+            width: 800px;
+            height: 500px;
+            margin: 50px auto;
+        }
+        .dot {
+            fill-opacity: 0.7;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 150px;
+            height: auto;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .legend {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+            cursor: pointer;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            margin-right: 5px;
+            display: inline-block;
+        }
+        .hidden-legend {
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Caixa de seleção para os municípios -->
+    <select id="municipio"></select>
+    <div class="scatter-chart"></div>
+    <div class="tooltip"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        d3.json('viol.json').then(function(loadedData) {
+            loadedData.forEach(function(d) {
+                d.ano = +d.ano;
+                d.hom_doloso = +d.hom_doloso;
+                d.lesao_corp_morte = +d.lesao_corp_morte;
+                d.latrocinio = +d.latrocinio;
+                d.cvli = +d.cvli;
+                d.hom_por_interv_policial = +d.hom_por_interv_policial;
+                d.letalidade_violenta = +d.letalidade_violenta;
+                d.tentat_hom = +d.tentat_hom;
+                d.lesao_corp_dolosa = +d.lesao_corp_dolosa;
+                d.estupro = +d.estupro;
+                d.apreensao_drogas = +d.apreensao_drogas;
+                d.posse_drogas = +d.posse_drogas;
+                d.trafico_drogas = +d.trafico_drogas;
+                d.apreensao_drogas_sem_autor = +d.apreensao_drogas_sem_autor;
+                d.recuperacao_veiculos = +d.recuperacao_veiculos;
+                d.apf = +d.apf;
+                d.aaapai = +d.aaapai;
+                d.cmp = +d.cmp;
+                d.cmba = +d.cmba;
+            });
+
+            const municipios = Array.from(new Set(loadedData.map(d => d.fmun)));
+            const selectMunicipio = d3.select("#municipio");
+            municipios.forEach(function(municipio) {
+                selectMunicipio.append("option").text(municipio);
+            });
+
+            desenharGrafico(municipios[0]);
+
+            selectMunicipio.on("change", function() {
+                desenharGrafico(this.value);
+            });
+
+            function desenharGrafico(municipioSelecionado) {
+                const filteredData = loadedData.filter(d => d.fmun === municipioSelecionado);
+
+                const crimes = [
+                    { name: "Homicídio Doloso", key: "hom_doloso" },
+                    { name: "Lesão Corporal Seguida de Morte", key: "lesao_corp_morte" },
+                    { name: "Latrocínio", key: "latrocinio" },
+                    { name: "Crimes Violentos Letais Intencionais", key: "cvli" },
+                    { name: "Homicídio por Intervenção Policial", key: "hom_por_interv_policial" },
+                    { name: "Letalidade Violenta", key: "letalidade_violenta" },
+                    { name: "Tentativa de Homicídio", key: "tentat_hom" },
+                    { name: "Lesão Corporal Dolosa", key: "lesao_corp_dolosa" },
+                    { name: "Estupro", key: "estupro" },
+                    { name: "Apreensão de Drogas", key: "apreensao_drogas" },
+                    { name: "Posse de Drogas", key: "posse_drogas" },
+                    { name: "Tráfico de Drogas", key: "trafico_drogas" },
+                    { name: "Apreensão de Drogas sem Autorização", key: "apreensao_drogas_sem_autor" },
+                    { name: "Recuperação de Veículos", key: "recuperacao_veiculos" },
+                    { name: "Prisão em Flagrante", key: "apf" },
+                    { name: "Apreensão de Adolescente por Ato Infracional", key: "aaapai" },
+                    { name: "Cumprimento de Mandado de Prisão", key: "cmp" },
+                    { name: "Cumprimento de Mandado de Busca e Apreensão", key: "cmba" }
+                ];
+
+                let yearCrimeSums = {};
+                filteredData.forEach(d => {
+                    if (!yearCrimeSums[d.ano]) {
+                        yearCrimeSums[d.ano] = {};
+                        crimes.forEach(crime => {
+                            yearCrimeSums[d.ano][crime.key] = 0;
+                        });
+                    }
+                    crimes.forEach(crime => {
+                        yearCrimeSums[d.ano][crime.key] += d[crime.key];
+                    });
+                });
+
+                const summedData = [];
+                Object.keys(yearCrimeSums).forEach(year => {
+                    crimes.forEach(crime => {
+                        summedData.push({
+                            ano: +year,
+                            crime: crime.name,
+                            key: crime.key,
+                            valor: yearCrimeSums[year][crime.key]
+                        });
+                    });
+                });
+
+                const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+                const width = 800 - margin.left - margin.right;
+                const height = 500 - margin.top - margin.bottom;
+
+                const x = d3.scaleLinear()
+                    .domain(d3.extent(summedData, d => d.ano))
+                    .range([0, width]);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(summedData, d => d.valor)])
+                    .range([height, 0]);
+
+                const r = d3.scaleSqrt()
+                    .domain([0, d3.max(summedData, d => d.valor)])
+                    .range([2, 20]);
+
+                const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+                const svg = d3.select(".scatter-chart").html("").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height})`)
+                    .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+                svg.append("g")
+                    .call(d3.axisLeft(y));
+
+                const tooltip = d3.select(".tooltip");
+
+                const dots = svg.selectAll(".dot")
+                    .data(summedData)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("cx", d => x(d.ano))
+                    .attr("cy", d => y(d.valor))
+                    .attr("r", d => r(d.valor))
+                    .attr("fill", d => color(d.key))
+                    .on("mouseover", function(event, d) {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`Ano: ${d.ano}<br>${d.crime}: ${d.valor}`)
+                            .style("left", (event.pageX + 5) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.transition().duration(500).style("opacity", 0);
+                    });
+
+                const legend = svg.selectAll(".legend")
+                    .data(crimes)
+                    .enter().append("g")
+                    .attr("class", "legend")
+                    .attr("transform", (d, i) => `translate(0, ${i * 20})`)
+                    .on("click", function(event, crime) {
+                        const currentOpacity = d3.select(this).style("opacity");
+                        d3.select(this).style("opacity", currentOpacity == 1 ? 0.3 : 1);
+
+                        svg.selectAll(".dot")
+                            .filter(d => d.key === crime.key)
+                            .attr("display", currentOpacity == 1 ? "none" : "inline");
+                    });
+
+                legend.append("rect")
+                    .attr("x", width - 18)
+                    .attr("width", 18)
+                    .attr("height", 18)
+                    .style("fill", d => color(d.key));
+
+                legend.append("text")
+                    .attr("x", width - 24)
+                    .attr("y", 9)
+                    .attr("dy", ".35em")
+                    .style("text-anchor", "end")
+                    .text(d => d.name);
+            }
+        });
+    </script>
+</body>
+</html>

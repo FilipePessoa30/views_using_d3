@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Dispersão - Dados de Violência</title>
+    <style>
+        .scatter-chart {
+            width: 800px;
+            height: 500px;
+            margin: 50px auto;
+        }
+        .dot {
+            fill: steelblue;
+            fill-opacity: 0.7;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 150px;
+            height: auto;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .legend {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            margin-right: 5px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Caixa de seleção para os municípios -->
+    <select id="municipio"></select>
+    <!-- Caixa de seleção para os tipos de crime -->
+    <select id="tipoCrime"></select>
+    <div class="scatter-chart"></div>
+    <div class="tooltip"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // Carrega os dados do arquivo JSON
+        d3.json('viol.json').then(function(loadedData) {
+            // Mapeia os meses
+            const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+            // Adiciona o mês ao dataset, assumindo que a primeira ocorrência é janeiro e a última é dezembro para cada ano e município
+            let yearMonthMap = {};
+
+            loadedData.forEach(function(d) {
+                d.ano = +d.ano;
+                d.hom_doloso = +d.hom_doloso;
+                d.lesao_corp_morte = +d.lesao_corp_morte;
+                d.latrocinio = +d.latrocinio;
+                d.cvli = +d.cvli;
+                d.hom_por_interv_policial = +d.hom_por_interv_policial;
+                d.letalidade_violenta = +d.letalidade_violenta;
+                d.tentat_hom = +d.tentat_hom;
+                d.lesao_corp_dolosa = +d.lesao_corp_dolosa;
+                d.estupro = +d.estupro;
+                d.apreensao_drogas = +d.apreensao_drogas;
+                d.posse_drogas = +d.posse_drogas;
+                d.trafico_drogas = +d.trafico_drogas;
+                d.apreensao_drogas_sem_autor = +d.apreensao_drogas_sem_autor;
+                d.recuperacao_veiculos = +d.recuperacao_veiculos;
+                d.apf = +d.apf;
+                d.aaapai = +d.aaapai;
+                d.cmp = +d.cmp;
+                d.cmba = +d.cmba;
+
+                let yearMunicipioKey = `${d.ano}-${d.fmun}`;
+                if (!yearMonthMap[yearMunicipioKey]) {
+                    yearMonthMap[yearMunicipioKey] = 0;
+                }
+                d.mes = months[yearMonthMap[yearMunicipioKey] % 12];
+                yearMonthMap[yearMunicipioKey]++;
+            });
+
+            // Preenche a caixa de seleção com os municípios
+            const municipios = Array.from(new Set(loadedData.map(d => d.fmun)));
+            const selectMunicipio = d3.select("#municipio");
+            municipios.forEach(function(municipio) {
+                selectMunicipio.append("option").text(municipio);
+            });
+
+            // Preenche a caixa de seleção com os tipos de crime
+            const crimes = {
+                "Homicídio Doloso": "hom_doloso",
+                "Lesão Corporal Seguida de Morte": "lesao_corp_morte",
+                "Latrocínio": "latrocinio",
+                "Crimes Violentos Letais Intencionais": "cvli",
+                "Homicídio por Intervenção Policial": "hom_por_interv_policial",
+                "Letalidade Violenta": "letalidade_violenta",
+                "Tentativa de Homicídio": "tentat_hom",
+                "Lesão Corporal Dolosa": "lesao_corp_dolosa",
+                "Estupro": "estupro",
+                "Apreensão de Drogas": "apreensao_drogas",
+                "Posse de Drogas": "posse_drogas",
+                "Tráfico de Drogas": "trafico_drogas",
+                "Apreensão de Drogas sem Autorização": "apreensao_drogas_sem_autor",
+                "Recuperação de Veículos": "recuperacao_veiculos",
+                "Prisão em Flagrante": "apf",
+                "Apreensão de Adolescente por Ato Infracional": "aaapai",
+                "Cumprimento de Mandado de Prisão": "cmp",
+                "Cumprimento de Mandado de Busca e Apreensão": "cmba"
+            };
+            const selectCrime = d3.select("#tipoCrime");
+            Object.keys(crimes).forEach(function(crime) {
+                selectCrime.append("option").text(crime).attr("value", crimes[crime]);
+            });
+
+            // Chama a função para desenhar o gráfico com o primeiro município e crime
+            desenharGrafico(municipios[0], crimes["Homicídio Doloso"]);
+
+            // Atualiza o gráfico quando um novo município ou crime é selecionado
+            selectMunicipio.on("change", function() {
+                desenharGrafico(this.value, selectCrime.node().value);
+            });
+            selectCrime.on("change", function() {
+                desenharGrafico(selectMunicipio.node().value, this.value);
+            });
+
+            function desenharGrafico(municipioSelecionado, crimeSelecionado) {
+                const filteredData = loadedData.filter(d => d.fmun === municipioSelecionado);
+
+                const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+                const width = 800 - margin.left - margin.right;
+                const height = 500 - margin.top - margin.bottom;
+
+                const x = d3.scaleLinear()
+                    .domain(d3.extent(filteredData, d => d.ano))
+                    .range([0, width]);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(filteredData, d => d[crimeSelecionado])])
+                    .range([height, 0]);
+
+                const r = d3.scaleSqrt()
+                    .domain([0, d3.max(filteredData, d => d[crimeSelecionado])])
+                    .range([2, 20]);
+
+                const svg = d3.select(".scatter-chart").html("").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height})`)
+                    .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+                svg.append("g")
+                    .call(d3.axisLeft(y));
+
+                const tooltip = d3.select(".tooltip");
+
+                svg.selectAll(".dot")
+                    .data(filteredData)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("cx", d => x(d.ano))
+                    .attr("cy", d => y(d[crimeSelecionado]))
+                    .attr("r", d => r(d[crimeSelecionado]))
+                    .on("mouseover", function(event, d) {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`Ano: ${d.ano}<br>Mês: ${d.mes}<br>${crimeSelecionado}: ${d[crimeSelecionado]}`)
+                            .style("left", (event.pageX + 5) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.transition().duration(500).style("opacity", 0);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>

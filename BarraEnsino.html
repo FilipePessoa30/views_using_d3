@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gráfico Educativo Interativo</title>
+    <style>
+        /* Estilos para o gráfico */
+        .axis-label {
+            font-size: 12px;
+        }
+
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 60px;
+            height: 28px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Caixa de seleção para os anos -->
+    <select id="ano">
+        <!-- As opções serão preenchidas pelo código JavaScript -->
+    </select>
+
+    <!-- Caixa de seleção para as cidades -->
+    <select id="cidade">
+        <!-- As opções serão preenchidas pelo código JavaScript -->
+    </select>
+
+    <!-- Div para o tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <!-- Incluir a biblioteca D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // Função para desenhar o gráfico
+        function desenharGrafico(anoSelecionado, cidadeSelecionada) {
+            // Limpa o gráfico anterior
+            d3.select("svg").remove();
+
+            // Carrega os dados do arquivo JSON
+            d3.json('Educa.json').then(function(data) {
+                // Filtra os dados pelo ano e pela cidade selecionados
+                const dadosCidadeAno = data.filter(d => d.fmun === cidadeSelecionada && d.Ano === anoSelecionado);
+
+                // Se não houver dados para o ano e cidade selecionados, não desenha o gráfico
+                if (!dadosCidadeAno.length) return;
+
+                // Define as dimensões e margens do gráfico
+                const margin = {top: 20, right: 20, bottom: 30, left: 40},
+                      width = 960 - margin.left - margin.right,
+                      height = 500 - margin.top - margin.bottom;
+
+                // Cria o contêiner SVG
+                const svg = d3.select("body").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                // Define uma escala de cores
+                const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+                // Define as escalas
+                const x = d3.scaleBand()
+                    .range([0, width])
+                    .padding(0.1);
+                const y = d3.scaleLinear()
+                    .range([height, 0]);
+
+                // Define o domínio das escalas
+                x.domain(['Fundamental_Aprovação', 'Ensino_médio_aprovação', 'Fundamental_Reprovação', 'Ensino_médio_Reprovação', 'Fundamental_Abandono', 'Ensino_médio_abandono']);
+                y.domain([0, 100]); // Supondo que as taxas são percentuais
+
+                // Adiciona as barras
+                svg.selectAll(".bar")
+                    .data(Object.keys(dadosCidadeAno[0]).slice(2)) // Ignora as duas primeiras chaves ('Ano' e 'fmun')
+                  .enter().append("rect")
+                    .attr("class", "bar")
+                    .attr("x", function(d) { return x(d); })
+                    .attr("width", x.bandwidth())
+                    .attr("y", function(d) { return y(Number(dadosCidadeAno[0][d])); })
+                    .attr("height", function(d) { return height - y(Number(dadosCidadeAno[0][d])); })
+                    .attr("fill", function(d, i) { return colorScale(i); }) // Aplica uma cor diferente a cada barra
+                    .on("mouseover", function(event, d) {
+                        // Mostra o tooltip ao passar o mouse
+                        d3.select("#tooltip")
+                            .style("opacity", 1)
+                            .html(dadosCidadeAno[0][d] + '%')
+                            .style("left", (event.pageX) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        // Esconde o tooltip
+                        d3.select("#tooltip").style("opacity", 0);
+                    });
+
+                // Adiciona os eixos
+                svg.append("g")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x))
+                  .selectAll(".axis-label")
+                    .style("text-anchor", "end")
+                    .attr("dx", "-.8em")
+                    .attr("dy", ".15em")
+                    .attr("transform", "rotate(-65)");
+
+                svg.append("g")
+                    .call(d3.axisLeft(y));
+            });
+        }
+
+        // Carrega os dados e preenche as caixas de seleção com os anos e cidades
+        d3.json('Educa.json').then(function(data) {
+            const anos = Array.from(new Set(data.map(d => d.Ano))).sort();
+            const cidades = Array.from(new Set(data.map(d => d.fmun))).sort();
+            const selectAno = d3.select("#ano");
+            const selectCidade = d3.select("#cidade");
+
+            anos.forEach(function(ano) {
+                selectAno.append("option").text(ano);
+            });
+
+            cidades.forEach(function(cidade) {
+                selectCidade.append("option").text(cidade);
+            });
+
+            // Desenha o gráfico para o primeiro ano e a primeira cidade por padrão
+            desenharGrafico(anos[0], cidades[0]);
+        });
+
+        // Atualiza o gráfico quando um novo ano ou cidade é selecionado
+        d3.select("#ano").on("change", function() {
+            const anoSelecionado = this.value;
+            const cidadeSelecionada = d3.select("#cidade").node().value;
+            desenharGrafico(anoSelecionado, cidadeSelecionada);
+        });
+
+        d3.select("#cidade").on("change", function() {
+            const cidadeSelecionada = this.value;
+            const anoSelecionado = d3.select("#ano").node().value;
+            desenharGrafico(anoSelecionado, cidadeSelecionada);
+        });
+    </script>
+</body>
+</html>
